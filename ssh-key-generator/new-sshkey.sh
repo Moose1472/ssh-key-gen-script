@@ -21,7 +21,7 @@ echo -e "\n--- Pushing public key (enter remote password when prompted) ---"
 
 case "$is_win" in
     [Yy]*)
-        # Windows: SCP the key file, then use PowerShell to install it
+        # Windows: SCP the key, then use PowerShell to install it
         scp -P "$port" "$key.pub" "$ruser@$rhost:temp_key.pub"
         if [ $? -ne 0 ]; then
             echo -e "\nERROR: Could not reach $rhost on port $port. Is SSH running on the remote machine?"
@@ -29,24 +29,35 @@ case "$is_win" in
             exit 1
         fi
 
-        # Install key, fix sshd_config, schedule restart
+        # Write key to both standard and admin locations — no restart needed
         PS_CMD='
-$sshDir   = "$env:USERPROFILE\.ssh"
-$authKeys = "$sshDir\authorized_keys"
-$tempKey  = "$env:USERPROFILE\temp_key.pub"
+$tempKey   = "$env:USERPROFILE\temp_key.pub"
+$sshDir    = "$env:USERPROFILE\.ssh"
+$authKeys  = "$sshDir\authorized_keys"
+$adminKeys = "C:\ProgramData\ssh\administrators_authorized_keys"
+
 New-Item -Force -ItemType Directory $sshDir | Out-Null
+if (!(Test-Path $authKeys))  { New-Item -Force -ItemType File $authKeys  | Out-Null }
+if (!(Test-Path $adminKeys)) { New-Item -Force -ItemType File $adminKeys | Out-Null }
+
 Get-Content $tempKey | Add-Content $authKeys
-Remove-Item $tempKey
+Get-Content $tempKey | Add-Content $adminKeys
+
+$acl = New-Object System.Security.AccessControl.FileSecurity
+$acl.SetAccessRuleProtection($true, $false)
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("Administrators","FullControl","Allow")))
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("SYSTEM","FullControl","Allow")))
+Set-Acl $adminKeys $acl
+
 $c = Get-Content "C:\ProgramData\ssh\sshd_config"
 $c = $c -replace "^Match Group administrators","#Match Group administrators" -replace "^(\s+AuthorizedKeysFile __PROGRAMDATA__\S*)","#`$1"
 Set-Content "C:\ProgramData\ssh\sshd_config" $c
-Start-Process powershell -ArgumentList "-Command","Start-Sleep 3; Restart-Service sshd" -WindowStyle Hidden
+
+Remove-Item $tempKey
 '
         ENC=$(printf '%s' "$PS_CMD" | iconv -t UTF-16LE | base64 | tr -d '\n')
-        echo "Applying Windows SSH fix (SSH will restart in a few seconds)..."
+        echo "Installing key and applying Windows SSH fix..."
         ssh -p "$port" "$ruser@$rhost" "powershell -EncodedCommand $ENC"
-        echo "Waiting for SSH service to restart..."
-        sleep 8
         ;;
     *)
         # Linux/macOS: standard ssh-copy-id
