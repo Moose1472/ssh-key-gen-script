@@ -1,101 +1,162 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class Dwm {
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+}
+"@ -ErrorAction SilentlyContinue
 
-# --- Detect system theme ---
+# --- System theme ---
 $reg  = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" -ErrorAction SilentlyContinue
 $dark = ($reg.AppsUseLightTheme -eq 0)
 
-$clrBg     = if ($dark) { [System.Drawing.Color]::FromArgb(30,  30,  30)  } else { [System.Drawing.Color]::FromArgb(243, 243, 243) }
-$clrInput  = if ($dark) { [System.Drawing.Color]::FromArgb(51,  51,  55)  } else { [System.Drawing.Color]::White }
-$clrOutput = if ($dark) { [System.Drawing.Color]::FromArgb(20,  20,  20)  } else { [System.Drawing.Color]::FromArgb(248, 248, 248) }
-$clrText   = if ($dark) { [System.Drawing.Color]::White                    } else { [System.Drawing.Color]::FromArgb(32,  32,  32) }
-$clrHint   = [System.Drawing.Color]::Gray
-$clrBtn    = [System.Drawing.Color]::FromArgb(0, 120, 212)
-$colGreen  = [System.Drawing.Color]::FromArgb(78,  201, 176)
-$colRed    = [System.Drawing.Color]::FromArgb(244, 71,  71)
-$colYellow = [System.Drawing.Color]::FromArgb(220, 200, 80)
+# --- System accent color ---
+try {
+    $ar   = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent" -ErrorAction Stop
+    $abgr = $ar.AccentColorMenu
+    $clrAccent = [System.Drawing.Color]::FromArgb(
+        $abgr -band 0xFF, ($abgr -shr 8) -band 0xFF, ($abgr -shr 16) -band 0xFF)
+} catch { $clrAccent = [System.Drawing.Color]::FromArgb(0, 120, 212) }
 
-try   { $monoFont = New-Object System.Drawing.Font("Cascadia Mono", 9) }
-catch { $monoFont = New-Object System.Drawing.Font("Consolas", 9) }
+# --- Colors ---
+if ($dark) {
+    $bg  = [System.Drawing.Color]::FromArgb(32,  32,  32)
+    $inp = [System.Drawing.Color]::FromArgb(40,  40,  40)
+    $out = [System.Drawing.Color]::FromArgb(20,  20,  20)
+    $bdr = [System.Drawing.Color]::FromArgb(60,  60,  60)
+    $txt = [System.Drawing.Color]::White
+    $sub = [System.Drawing.Color]::FromArgb(150, 150, 150)
+} else {
+    $bg  = [System.Drawing.Color]::FromArgb(243, 243, 243)
+    $inp = [System.Drawing.Color]::White
+    $out = [System.Drawing.Color]::FromArgb(248, 248, 248)
+    $bdr = [System.Drawing.Color]::FromArgb(200, 200, 200)
+    $txt = [System.Drawing.Color]::FromArgb(28,  28,  28)
+    $sub = [System.Drawing.Color]::FromArgb(100, 100, 100)
+}
+$gn = [System.Drawing.Color]::FromArgb(78,  201, 176)
+$rd = [System.Drawing.Color]::FromArgb(244, 71,  71)
+$yl = [System.Drawing.Color]::FromArgb(220, 200, 80)
+
+# --- Fonts ---
+try {
+    $fTitle = New-Object System.Drawing.Font("Segoe UI Variable Display", 15)
+    $fBody  = New-Object System.Drawing.Font("Segoe UI Variable Text",    9)
+    $fSmall = New-Object System.Drawing.Font("Segoe UI Variable Text",    8)
+    $fBtn   = New-Object System.Drawing.Font("Segoe UI Variable Text",    10)
+} catch {
+    $fTitle = New-Object System.Drawing.Font("Segoe UI", 15)
+    $fBody  = New-Object System.Drawing.Font("Segoe UI", 9)
+    $fSmall = New-Object System.Drawing.Font("Segoe UI", 8)
+    $fBtn   = New-Object System.Drawing.Font("Segoe UI", 10)
+}
+try   { $fMono = New-Object System.Drawing.Font("Cascadia Mono", 9) }
+catch { $fMono = New-Object System.Drawing.Font("Consolas",      9) }
 
 # --- Form ---
-$form                  = New-Object System.Windows.Forms.Form
-$form.Text             = "SSH Key Generator"
-$form.Size             = New-Object System.Drawing.Size(520, 680)
-$form.StartPosition    = "CenterScreen"
-$form.BackColor        = $clrBg
-$form.FormBorderStyle  = "FixedSingle"
-$form.MaximizeBox      = $false
-$form.Font             = New-Object System.Drawing.Font("Segoe UI", 9)
+$form                 = New-Object System.Windows.Forms.Form
+$form.Text            = "SSH Key Generator"
+$form.Size            = New-Object System.Drawing.Size(480, 800)
+$form.StartPosition   = "CenterScreen"
+$form.BackColor       = $bg
+$form.FormBorderStyle = "FixedSingle"
+$form.MaximizeBox     = $false
+$form.Font            = $fBody
 
-# --- Helpers ---
-function New-Label($text, $x, $y) {
+$px = 24
+$fw = $form.ClientSize.Width - ($px * 2)
+
+# --- Windows 11 DWM effects ---
+$form.Add_Shown({
+    try {
+        $v = 2; [Dwm]::DwmSetWindowAttribute($form.Handle, 33, [ref]$v, 4) | Out-Null
+        if ($dark) { $v = 1; [Dwm]::DwmSetWindowAttribute($form.Handle, 20, [ref]$v, 4) | Out-Null }
+    } catch {}
+    $r = 5; $d = $r * 2; $w = $btnRun.Width; $h = $btnRun.Height
+    $gp = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $gp.AddArc(0,      0,      $d, $d, 180, 90)
+    $gp.AddArc($w - $d, 0,      $d, $d, 270, 90)
+    $gp.AddArc($w - $d, $h - $d, $d, $d,   0, 90)
+    $gp.AddArc(0,      $h - $d, $d, $d,  90, 90)
+    $gp.CloseFigure()
+    $btnRun.Region = New-Object System.Drawing.Region($gp)
+})
+
+# --- Header ---
+$lblTitle = New-Object System.Windows.Forms.Label
+$lblTitle.Text = "SSH Key Generator"; $lblTitle.Font = $fTitle
+$lblTitle.ForeColor = $txt; $lblTitle.Location = New-Object System.Drawing.Point($px, 20)
+$lblTitle.AutoSize = $true; $form.Controls.Add($lblTitle)
+
+$lblSub = New-Object System.Windows.Forms.Label
+$lblSub.Text = "Set up passwordless SSH access in one click"
+$lblSub.ForeColor = $sub; $lblSub.Font = $fBody
+$lblSub.Location = New-Object System.Drawing.Point($px, 50); $lblSub.AutoSize = $true
+$form.Controls.Add($lblSub)
+
+$sep = New-Object System.Windows.Forms.Panel
+$sep.Location = New-Object System.Drawing.Point($px, 76)
+$sep.Size = New-Object System.Drawing.Size($fw, 1); $sep.BackColor = $bdr
+$form.Controls.Add($sep)
+
+# --- Field builder ---
+function Add-Field($label, $yPos, $default = "", $width = $fw) {
     $l = New-Object System.Windows.Forms.Label
-    $l.Text = $text; $l.Location = New-Object System.Drawing.Point($x, $y)
-    $l.AutoSize = $true; $l.ForeColor = $clrText
-    $form.Controls.Add($l); return $l
-}
-function New-Field($x, $y, $w, $val = "") {
+    $l.Text = $label; $l.ForeColor = $txt; $l.Font = $fBody
+    $l.Location = New-Object System.Drawing.Point($px, $yPos); $l.AutoSize = $true
+    $form.Controls.Add($l)
     $t = New-Object System.Windows.Forms.TextBox
-    $t.Location = New-Object System.Drawing.Point($x, $y)
-    $t.Size = New-Object System.Drawing.Size($w, 26)
-    $t.Text = $val; $t.BackColor = $clrInput; $t.ForeColor = $clrText
-    $t.BorderStyle = "FixedSingle"
+    $t.Location = New-Object System.Drawing.Point($px, ($yPos + 22))
+    $t.Size = New-Object System.Drawing.Size($width, 32)
+    $t.Text = $default; $t.BackColor = $inp; $t.ForeColor = $txt
+    $t.BorderStyle = "FixedSingle"; $t.Font = $fBody
     $form.Controls.Add($t); return $t
 }
 
-$lx = 20; $ix = 190; $iw = 280
-
-$y = 24
-New-Label "Key Name:"             $lx $y | Out-Null; $txtName = New-Field $ix $y $iw
-$y += 38
-New-Label "Remote IP / Hostname:" $lx $y | Out-Null; $txtHost = New-Field $ix $y $iw
-$y += 38
-New-Label "Remote Username:"      $lx $y | Out-Null; $txtUser = New-Field $ix $y $iw
-$y += 38
-New-Label "SSH Port:"             $lx $y | Out-Null; $txtPort = New-Field $ix $y 60 "22"
-$y += 38
+$y = 92
+$txtName = Add-Field "Key Name"             $y;           $y += 62
+$txtHost = Add-Field "Remote IP / Hostname" $y;           $y += 62
+$txtUser = Add-Field "Remote Username"      $y;           $y += 62
+$txtPort = Add-Field "SSH Port"             $y "22" 80
 
 $chkWin = New-Object System.Windows.Forms.CheckBox
 $chkWin.Text = "Remote machine is Windows"
-$chkWin.Location = New-Object System.Drawing.Point($ix, $y)
-$chkWin.AutoSize = $true; $chkWin.ForeColor = $clrText; $chkWin.BackColor = $clrBg
-$form.Controls.Add($chkWin)
-$y += 38
+$chkWin.Location = New-Object System.Drawing.Point(($px + 96), ($y + 24))
+$chkWin.AutoSize = $true; $chkWin.ForeColor = $txt; $chkWin.BackColor = $bg
+$form.Controls.Add($chkWin); $y += 62
 
-New-Label "SSH Nickname:" $lx $y | Out-Null; $txtNick = New-Field $ix $y $iw
-$hint = New-Object System.Windows.Forms.Label
-$hint.Text = "(leave blank to use key name)"; $hint.ForeColor = $clrHint
-$hint.Location = New-Object System.Drawing.Point($ix, ($y + 28))
-$hint.AutoSize = $true
-$hint.Font = New-Object System.Drawing.Font("Segoe UI", 8)
-$form.Controls.Add($hint)
-$y += 62
+$txtNick = Add-Field "SSH Nickname" $y;   $y += 26
 
+$lblHint = New-Object System.Windows.Forms.Label
+$lblHint.Text = "Leave blank to use key name"; $lblHint.ForeColor = $sub; $lblHint.Font = $fSmall
+$lblHint.Location = New-Object System.Drawing.Point($px, $y); $lblHint.AutoSize = $true
+$form.Controls.Add($lblHint); $y += 42
+
+# --- Button ---
 $btnRun = New-Object System.Windows.Forms.Button
-$btnRun.Text = "Generate Key"
-$btnRun.Location = New-Object System.Drawing.Point($lx, $y)
-$btnRun.Size = New-Object System.Drawing.Size(($form.ClientSize.Width - 40), 38)
-$btnRun.BackColor = $clrBtn; $btnRun.ForeColor = [System.Drawing.Color]::White
+$btnRun.Text = "Generate Key"; $btnRun.Font = $fBtn
+$btnRun.Location = New-Object System.Drawing.Point($px, $y)
+$btnRun.Size = New-Object System.Drawing.Size($fw, 40)
+$btnRun.BackColor = $clrAccent; $btnRun.ForeColor = [System.Drawing.Color]::White
 $btnRun.FlatStyle = "Flat"; $btnRun.FlatAppearance.BorderSize = 0
-$btnRun.Font = New-Object System.Drawing.Font("Segoe UI", 10)
-$form.Controls.Add($btnRun)
-$y += 50
+$form.Controls.Add($btnRun); $y += 52
 
+# --- Output ---
 $txtOut = New-Object System.Windows.Forms.RichTextBox
-$txtOut.Location = New-Object System.Drawing.Point($lx, $y)
-$txtOut.Size = New-Object System.Drawing.Size(($form.ClientSize.Width - 40), ($form.ClientSize.Height - $y - 40))
-$txtOut.BackColor = $clrOutput; $txtOut.ForeColor = $clrText
+$txtOut.Location = New-Object System.Drawing.Point($px, $y)
+$txtOut.Size = New-Object System.Drawing.Size($fw, ($form.ClientSize.Height - $y - $px))
+$txtOut.BackColor = $out; $txtOut.ForeColor = $txt
 $txtOut.ReadOnly = $true; $txtOut.BorderStyle = "None"
-$txtOut.Font = $monoFont; $txtOut.ScrollBars = "Vertical"
+$txtOut.Font = $fMono; $txtOut.ScrollBars = "Vertical"
 $form.Controls.Add($txtOut)
 
-# --- Output helper ---
 function Out($msg, $col = $null) {
     $txtOut.SelectionStart = $txtOut.TextLength; $txtOut.SelectionLength = 0
-    $txtOut.SelectionColor = if ($col) { $col } else { $clrText }
-    $txtOut.AppendText("$msg`n")
-    $txtOut.ScrollToCaret()
+    $txtOut.SelectionColor = if ($col) { $col } else { $txt }
+    $txtOut.AppendText("$msg`n"); $txtOut.ScrollToCaret()
     [System.Windows.Forms.Application]::DoEvents()
 }
 
@@ -121,7 +182,6 @@ $btnRun.Add_Click({
     $dir = Join-Path $HOME ".ssh/keys/$name"
     $key = Join-Path $dir "${name}id_ed25519"
 
-    # Check for existing key
     if (Test-Path $key) {
         $res = [System.Windows.Forms.MessageBox]::Show(
             "A key named '$name' already exists. Overwrite it?",
@@ -130,32 +190,33 @@ $btnRun.Add_Click({
         Remove-Item -Force "$key", "$key.pub" -ErrorAction SilentlyContinue
     }
 
-    # --- Generate key pair ---
-    Out "--- Generating key pair ---" $colYellow
+    # --- Generate ---
+    Out "--- Generating key pair ---" $yl
     $comment = "$([System.Environment]::UserName)@$(hostname)"
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     cmd /c "ssh-keygen -t ed25519 -f `"$key`" -C `"$comment`" -N `"`"" 2>&1 | Out-Null
-    if (Test-Path $key) { Out "✓ Key pair created" $colGreen }
-    else { Out "✗ Failed to generate key pair" $colRed; $btnRun.Enabled = $true; return }
+    if (Test-Path $key) { Out "✓ Key pair created" $gn }
+    else { Out "✗ Failed to generate key pair" $rd; $btnRun.Enabled = $true; return }
 
-    # --- Push public key ---
-    Out ""; Out "--- Pushing public key ---" $colYellow
-    Out "  Minimizing — enter your password in the console window..." $clrHint
+    # --- Push ---
+    Out ""; Out "--- Pushing public key ---" $yl
+    Out "  Minimizing — enter your password in the console window..." $sub
     [System.Windows.Forms.Application]::DoEvents()
     $form.WindowState = "Minimized"
     scp -P $port "$key.pub" "${ruser}@${rhost}:temp_key.pub"
     $scpExit = $LASTEXITCODE
     $form.WindowState = "Normal"; $form.BringToFront()
+
     if ($scpExit -ne 0) {
-        Out "✗ Could not reach $rhost — is SSH running on the remote machine?" $colRed
+        Out "✗ Could not reach $rhost — is SSH running on the remote machine?" $rd
         Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
         $btnRun.Enabled = $true; return
     }
-    Out "✓ Key transferred to remote machine" $colGreen
+    Out "✓ Key transferred to remote machine" $gn
 
-    # --- Install key ---
+    # --- Install ---
     if ($isWin) {
-        Out ""; Out "--- Applying Windows SSH fix ---" $colYellow
+        Out ""; Out "--- Applying Windows SSH fix ---" $yl
         $ps_cmd = '
 $tempKey   = "$env:USERPROFILE\temp_key.pub"
 $sshDir    = "$env:USERPROFILE\.ssh"
@@ -180,39 +241,39 @@ Remove-Item $tempKey
         $enc   = [System.Convert]::ToBase64String($bytes)
         ssh -p $port "${ruser}@${rhost}" "powershell -EncodedCommand $enc" 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) {
-            Out "✓ Key installed in authorized locations" $colGreen
-            Out "✓ SSH config updated"                    $colGreen
-        } else { Out "✗ Windows SSH fix encountered an error" $colRed }
+            Out "✓ Key installed in authorized locations" $gn
+            Out "✓ SSH config updated"                   $gn
+        } else { Out "✗ Windows SSH fix encountered an error" $rd }
     } else {
-        Out ""; Out "--- Installing key ---" $colYellow
+        Out ""; Out "--- Installing key ---" $yl
         ssh -p $port "${ruser}@${rhost}" "mkdir -p ~/.ssh && cat ~/temp_key.pub >> ~/.ssh/authorized_keys && rm ~/temp_key.pub && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh" 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) { Out "✓ Key installed in authorized_keys" $colGreen }
-        else { Out "✗ Failed to install key on remote machine" $colRed }
+        if ($LASTEXITCODE -eq 0) { Out "✓ Key installed in authorized_keys" $gn }
+        else { Out "✗ Failed to install key on remote machine" $rd }
     }
 
     # --- SSH config ---
-    Out ""; Out "--- Adding SSH config entry ---" $colYellow
+    Out ""; Out "--- Adding SSH config entry ---" $yl
     $configPath = Join-Path $HOME ".ssh/config"
     if (-not (Test-Path $configPath)) { New-Item -ItemType File -Force -Path $configPath | Out-Null }
     $keyFwd = $key -replace '\\', '/'
     Add-Content $configPath "`nHost $nick`n    HostName $rhost`n    User $ruser`n    Port $port`n    IdentityFile $keyFwd"
-    Out "✓ Entry added for '$nick'" $colGreen
+    Out "✓ Entry added for '$nick'" $gn
 
-    # --- Test connection ---
-    Out ""; Out "--- Testing connection ---" $colYellow
+    # --- Test ---
+    Out ""; Out "--- Testing connection ---" $yl
     $result = ssh -o BatchMode=yes -o ConnectTimeout=5 $nick "echo success" 2>&1
     if ($result -match "success") {
-        Out "✓ Connection successful!" $colGreen
+        Out "✓ Connection successful!" $gn
         Out ""
-        Out "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" $colGreen
+        Out "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" $gn
         Out "  Done! Test your connection anytime with:"
         Out ""
-        Out "      ssh $nick"                            $colGreen
+        Out "      ssh $nick"                           $gn
         Out ""
-        Out "  No password should be asked for."         $clrHint
-        Out "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" $colGreen
+        Out "  No password should be asked for."       $sub
+        Out "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" $gn
     } else {
-        Out "✗ Connection test failed — check your settings" $colRed
+        Out "✗ Connection test failed — check your settings" $rd
     }
 
     $btnRun.Enabled = $true
