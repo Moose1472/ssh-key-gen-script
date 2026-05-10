@@ -53,7 +53,7 @@ bash <(curl -sS https://graysden.com/ssh-key-gen.sh)
 
 1. Generates a passwordless `ed25519` key pair
 2. Pushes the public key to the remote machine *(you'll enter the remote password once — never again)*
-3. If the remote machine is Windows, automatically fixes the SSH config and restarts the service
+3. If the remote machine is Windows, automatically installs the key in the correct locations and fixes the SSH config — no restart required
 4. Adds an entry to your SSH config
 5. Tests the connection to confirm everything works
 
