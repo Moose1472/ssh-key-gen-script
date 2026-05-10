@@ -6,12 +6,32 @@ Personal collection of scripts and tools. Hosted publicly so they can be pulled 
 
 ## Table of Contents
 
+- [Windows SSH Prep](#windows-ssh-prep) ← Run this first on any Windows machine you want to SSH into
 - [SSH Key Generator](#ssh-key-generator)
   - [Run It](#run-it)
   - [What It Asks](#what-it-asks)
   - [What It Does](#what-it-does)
   - [Where Keys Are Stored](#where-keys-are-stored)
   - [Connecting After Setup](#connecting-after-setup)
+
+---
+
+## Windows SSH Prep
+
+Run this **once** on any Windows machine you want to SSH into before running the key generator. It handles everything automatically — no manual steps required.
+
+```powershell
+irm https://graysden.com/win-ssh-prep.ps1 | iex
+```
+
+**What it does:**
+1. Installs OpenSSH Server if not already installed
+2. Starts the SSH service and sets it to run automatically on boot
+3. Fixes a Windows quirk where SSH ignores keys for admin accounts
+4. Creates the `authorized_keys` file if it doesn't exist
+5. Prints your IP addresses so you know what to enter in the key generator
+
+> Linux and macOS machines do not need this — they accept SSH keys out of the box.
 
 ---
 
