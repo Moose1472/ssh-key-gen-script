@@ -18,21 +18,42 @@ ssh-keygen -t ed25519 -f "$key" -C "$USER@$(hostname)" -N ""
 
 # --- Push public key to remote machine ---
 echo -e "\n--- Pushing public key (enter remote password when prompted) ---"
-ssh-copy-id -i "$key.pub" -p "$port" "$ruser@$rhost"
-if [ $? -ne 0 ]; then
-    echo -e "\nERROR: Could not reach $rhost on port $port. Is SSH running on the remote machine?"
-    rm -rf "$dir"
-    exit 1
-fi
 
-# --- Windows-specific fix ---
 if [[ "${is_win,,}" == "y" ]]; then
-    echo -e "\n--- Applying Windows SSH fix ---"
-    PS_CMD='$c=Get-Content "C:\ProgramData\ssh\sshd_config"; $c=$c -replace "^Match Group administrators","#Match Group administrators" -replace "^(\s+AuthorizedKeysFile __PROGRAMDATA__\S*)","#`$1"; Set-Content "C:\ProgramData\ssh\sshd_config" $c; $d="$env:USERPROFILE\.ssh"; if(!(Test-Path $d)){New-Item -ItemType Directory -Force $d|Out-Null}; $f="$d\authorized_keys"; if(!(Test-Path $f)){New-Item -ItemType File -Force $f|Out-Null}'
+    # Windows: SCP the key file, then use PowerShell to install it
+    scp -P "$port" "$key.pub" "$ruser@$rhost:temp_key.pub"
+    if [ $? -ne 0 ]; then
+        echo -e "\nERROR: Could not reach $rhost on port $port. Is SSH running on the remote machine?"
+        rm -rf "$dir"
+        exit 1
+    fi
+
+    # Install key, fix sshd_config, schedule restart
+    PS_CMD='
+$sshDir  = "$env:USERPROFILE\.ssh"
+$authKeys = "$sshDir\authorized_keys"
+$tempKey  = "$env:USERPROFILE\temp_key.pub"
+New-Item -Force -ItemType Directory $sshDir | Out-Null
+Get-Content $tempKey | Add-Content $authKeys
+Remove-Item $tempKey
+$c = Get-Content "C:\ProgramData\ssh\sshd_config"
+$c = $c -replace "^Match Group administrators","#Match Group administrators" -replace "^(\s+AuthorizedKeysFile __PROGRAMDATA__\S*)","#`$1"
+Set-Content "C:\ProgramData\ssh\sshd_config" $c
+Start-Process powershell -ArgumentList "-Command","Start-Sleep 3; Restart-Service sshd" -WindowStyle Hidden
+'
     ENC=$(printf '%s' "$PS_CMD" | iconv -t UTF-16LE | base64 | tr -d '\n')
-    ssh -p "$port" "$ruser@$rhost" "powershell -EncodedCommand $ENC && cmd /c start /b powershell -Command \"Start-Sleep 3; Restart-Service sshd\""
+    echo "Applying Windows SSH fix (SSH will restart in a few seconds)..."
+    ssh -p "$port" "$ruser@$rhost" "powershell -EncodedCommand $ENC"
     echo "Waiting for SSH service to restart..."
     sleep 8
+else
+    # Linux/macOS: standard ssh-copy-id
+    ssh-copy-id -i "$key.pub" -p "$port" "$ruser@$rhost"
+    if [ $? -ne 0 ]; then
+        echo -e "\nERROR: Could not reach $rhost on port $port. Is SSH running on the remote machine?"
+        rm -rf "$dir"
+        exit 1
+    fi
 fi
 
 # --- Add SSH config entry ---
