@@ -209,7 +209,7 @@ Remove-Item $tempKey
         Out ""
         Out "      ssh $nick"                            $colGreen
         Out ""
-        Out "  No password will be asked."              $clrHint
+        Out "  No password should be asked for."         $clrHint
         Out "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" $colGreen
     } else {
         Out "✗ Connection test failed — check your settings" $colRed
