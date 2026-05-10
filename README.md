@@ -6,32 +6,13 @@ Personal collection of scripts and tools. Hosted publicly so they can be pulled 
 
 ## Table of Contents
 
-- [Windows SSH Prep](#windows-ssh-prep) ← Run this first on any Windows machine you want to SSH into
 - [SSH Key Generator](#ssh-key-generator)
   - [Run It](#run-it)
   - [What It Asks](#what-it-asks)
   - [What It Does](#what-it-does)
   - [Where Keys Are Stored](#where-keys-are-stored)
   - [Connecting After Setup](#connecting-after-setup)
-
----
-
-## Windows SSH Prep
-
-Run this **once** on any Windows machine you want to SSH into before running the key generator. It handles everything automatically — no manual steps required.
-
-```powershell
-irm https://graysden.com/win-ssh-prep.ps1 | iex
-```
-
-**What it does:**
-1. Installs OpenSSH Server if not already installed
-2. Starts the SSH service and sets it to run automatically on boot
-3. Fixes a Windows quirk where SSH ignores keys for admin accounts
-4. Creates the `authorized_keys` file if it doesn't exist
-5. Prints your IP addresses so you know what to enter in the key generator
-
-> Linux and macOS machines do not need this — they accept SSH keys out of the box.
+- [Windows SSH Prep](#windows-ssh-prep)
 
 ---
 
@@ -63,6 +44,7 @@ bash <(curl -sS https://graysden.com/ssh-key-gen.sh)
 | Remote IP or hostname | `192.168.1.100` | The machine you want to connect to |
 | Username on remote machine | `john` | Your username on that machine |
 | SSH port | `22` | Press Enter to use the default (22) |
+| Is the remote machine Windows? | `y` / `N` | Applies an automatic fix for Windows SSH key auth |
 | SSH config nickname | `home` | What you'll type to connect — press Enter to use the key name |
 
 ---
@@ -71,8 +53,9 @@ bash <(curl -sS https://graysden.com/ssh-key-gen.sh)
 
 1. Generates a passwordless `ed25519` key pair
 2. Pushes the public key to the remote machine *(you'll enter the remote password once — never again)*
-3. Adds an entry to your SSH config
-4. Tests the connection to confirm everything works
+3. If the remote machine is Windows, automatically fixes the SSH config and restarts the service
+4. Adds an entry to your SSH config
+5. Tests the connection to confirm everything works
 
 ---
 
@@ -101,3 +84,15 @@ ssh NickName
 ```
 
 No IP address, no username, no key path — the SSH config handles all of it automatically.
+
+---
+
+## Windows SSH Prep
+
+If you need to manually prepare a Windows machine to accept SSH keys before running the key generator, run this on the Windows machine:
+
+```powershell
+irm https://graysden.com/win-ssh-prep.ps1 | iex
+```
+
+> This is optional — the key generator handles it automatically when you answer `y` to the Windows prompt.
