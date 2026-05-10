@@ -8,15 +8,16 @@ Personal collection of scripts and tools. Hosted publicly so they can be pulled 
 
 - [SSH Key Generator](#ssh-key-generator)
   - [Run It](#run-it)
+  - [What It Asks](#what-it-asks)
   - [What It Does](#what-it-does)
   - [Where Keys Are Stored](#where-keys-are-stored)
-  - [Adding Your Key to a Remote Machine](#adding-your-key-to-a-remote-machine)
+  - [Connecting After Setup](#connecting-after-setup)
 
 ---
 
 ## SSH Key Generator
 
-Generates an `ed25519` SSH key pair, automatically named and organized by whatever name you provide. No passphrase — keys are ready to use immediately.
+Fully automated SSH key setup. Generates a key pair, pushes it to the remote machine, adds an SSH config entry, and tests the connection — all in one run. After setup, connecting is as simple as `ssh NickName`.
 
 ### Run It
 
@@ -34,12 +35,24 @@ bash <(curl -sS https://graysden.com/ssh-key-gen.sh)
 
 ---
 
+### What It Asks
+
+| Prompt | Example | Notes |
+|---|---|---|
+| Key name | `HomeServer` | Names the key files and folder |
+| Remote IP or hostname | `192.168.1.100` | The machine you want to connect to |
+| Username on remote machine | `john` | Your username on that machine |
+| SSH port | `22` | Press Enter to use the default (22) |
+| SSH config nickname | `home` | What you'll type to connect — press Enter to use the key name |
+
+---
+
 ### What It Does
 
-1. Asks you for a key name (e.g. `HomeServer`)
-2. Creates the directory automatically if it doesn't exist
-3. Generates a private key and a public key
-4. Prints the public key so you can copy it to your target machine
+1. Generates a passwordless `ed25519` key pair
+2. Pushes the public key to the remote machine *(you'll enter the remote password once — never again)*
+3. Adds an entry to your SSH config
+4. Tests the connection to confirm everything works
 
 ---
 
@@ -51,7 +64,7 @@ bash <(curl -sS https://graysden.com/ssh-key-gen.sh)
 | Linux | `/home/[you]/.ssh/keys/[name]/[name]id_ed25519` |
 | macOS | `/Users/[you]/.ssh/keys/[name]/[name]id_ed25519` |
 
-**Example** — if your username is `john` and you named the key `HomeServer`:
+**Example** — username `john`, key named `HomeServer`:
 ```
 C:\Users\john\.ssh\keys\HomeServer\HomeServerid_ed25519
 C:\Users\john\.ssh\keys\HomeServer\HomeServerid_ed25519.pub
@@ -59,22 +72,12 @@ C:\Users\john\.ssh\keys\HomeServer\HomeServerid_ed25519.pub
 
 ---
 
-### Adding Your Key to a Remote Machine
+### Connecting After Setup
 
-After running the script, your public key is printed on screen. To allow passwordless SSH into a remote machine, copy that public key line and add it to the remote machine's authorized keys file.
+Once the script finishes, connect to the machine anytime with just:
 
-**On the remote machine, run:**
 ```bash
-echo "paste-your-public-key-here" >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
+ssh NickName
 ```
 
-**Or use `ssh-copy-id` if available:**
-```bash
-ssh-copy-id -i ~/.ssh/keys/[name]/[name]id_ed25519.pub user@remote-ip
-```
-
-Once added, you can SSH in without a password:
-```bash
-ssh -i ~/.ssh/keys/[name]/[name]id_ed25519 user@remote-ip
-```
+No IP address, no username, no key path — the SSH config handles all of it automatically.
