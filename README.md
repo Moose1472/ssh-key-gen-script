@@ -36,7 +36,7 @@ bash <(curl -sS https://graysden.com/ssh-key-gen.sh)
 
 ### What It Does
 
-1. Asks you for a key name (e.g. `LarsonBOSS`)
+1. Asks you for a key name (e.g. `HomeServer`)
 2. Creates the directory automatically if it doesn't exist
 3. Generates a private key and a public key
 4. Prints the public key so you can copy it to your target machine
@@ -51,10 +51,10 @@ bash <(curl -sS https://graysden.com/ssh-key-gen.sh)
 | Linux | `/home/[you]/.ssh/keys/[name]/[name]id_ed25519` |
 | macOS | `/Users/[you]/.ssh/keys/[name]/[name]id_ed25519` |
 
-**Example** — if your username is `grayl` and you named the key `LarsonBOSS`:
+**Example** — if your username is `john` and you named the key `HomeServer`:
 ```
-C:\Users\grayl\.ssh\keys\LarsonBOSS\LarsonBOSSid_ed25519
-C:\Users\grayl\.ssh\keys\LarsonBOSS\LarsonBOSSid_ed25519.pub
+C:\Users\john\.ssh\keys\HomeServer\HomeServerid_ed25519
+C:\Users\john\.ssh\keys\HomeServer\HomeServerid_ed25519.pub
 ```
 
 ---
