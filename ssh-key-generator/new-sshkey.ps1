@@ -22,23 +22,47 @@ if ($env:OS -eq 'Windows_NT') {
 
 # --- Push public key to remote machine ---
 Write-Host "`n--- Pushing public key (enter remote password when prompted) ---"
-scp -P $port "$key.pub" "${ruser}@${rhost}:/tmp/temp_key.pub"
+scp -P $port "$key.pub" "${ruser}@${rhost}:temp_key.pub"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "`nERROR: Could not reach $rhost on port $port. Is SSH running on the remote machine?"
     Remove-Item -Recurse -Force $dir
     exit 1
 }
-ssh -p $port "${ruser}@${rhost}" "mkdir -p ~/.ssh && cat /tmp/temp_key.pub >> ~/.ssh/authorized_keys && rm /tmp/temp_key.pub && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"
 
-# --- Windows-specific fix ---
 if ($is_win -match "^[Yy]") {
-    Write-Host "`n--- Applying Windows SSH fix ---"
-    $ps_cmd = '$c=Get-Content "C:\ProgramData\ssh\sshd_config"; $c=$c -replace "^Match Group administrators","#Match Group administrators" -replace "^(\s+AuthorizedKeysFile __PROGRAMDATA__\S*)","#`$1"; Set-Content "C:\ProgramData\ssh\sshd_config" $c; $d="$env:USERPROFILE\.ssh"; if(!(Test-Path $d)){New-Item -ItemType Directory -Force $d|Out-Null}; $f="$d\authorized_keys"; if(!(Test-Path $f)){New-Item -ItemType File -Force $f|Out-Null}'
+    # Windows remote: write key to both auth locations, fix sshd_config — no restart needed
+    Write-Host "`n--- Installing key and applying Windows SSH fix ---"
+    $ps_cmd = '
+$tempKey   = "$env:USERPROFILE\temp_key.pub"
+$sshDir    = "$env:USERPROFILE\.ssh"
+$authKeys  = "$sshDir\authorized_keys"
+$adminKeys = "C:\ProgramData\ssh\administrators_authorized_keys"
+
+New-Item -Force -ItemType Directory $sshDir | Out-Null
+if (!(Test-Path $authKeys))  { New-Item -Force -ItemType File $authKeys  | Out-Null }
+if (!(Test-Path $adminKeys)) { New-Item -Force -ItemType File $adminKeys | Out-Null }
+
+Get-Content $tempKey | Add-Content $authKeys
+Get-Content $tempKey | Add-Content $adminKeys
+
+$acl = New-Object System.Security.AccessControl.FileSecurity
+$acl.SetAccessRuleProtection($true, $false)
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("Administrators","FullControl","Allow")))
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("SYSTEM","FullControl","Allow")))
+Set-Acl $adminKeys $acl
+
+$c = Get-Content "C:\ProgramData\ssh\sshd_config"
+$c = $c -replace "^Match Group administrators","#Match Group administrators" -replace "^(\s+AuthorizedKeysFile __PROGRAMDATA__\S*)","#`$1"
+Set-Content "C:\ProgramData\ssh\sshd_config" $c
+
+Remove-Item $tempKey
+'
     $bytes = [System.Text.Encoding]::Unicode.GetBytes($ps_cmd)
     $enc   = [System.Convert]::ToBase64String($bytes)
-    ssh -p $port "${ruser}@${rhost}" "powershell -EncodedCommand $enc && cmd /c start /b powershell -Command `"Start-Sleep 3; Restart-Service sshd`""
-    Write-Host "Waiting for SSH service to restart..."
-    Start-Sleep 8
+    ssh -p $port "${ruser}@${rhost}" "powershell -EncodedCommand $enc"
+} else {
+    # Linux/macOS remote: run standard bash commands
+    ssh -p $port "${ruser}@${rhost}" "mkdir -p ~/.ssh && cat ~/temp_key.pub >> ~/.ssh/authorized_keys && rm ~/temp_key.pub && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"
 }
 
 # --- Add SSH config entry ---
