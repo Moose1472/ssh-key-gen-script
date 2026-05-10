@@ -21,8 +21,14 @@ if ($env:OS -eq 'Windows_NT') {
 
 # --- Push public key to remote machine ---
 Write-Host "`n--- Pushing public key (enter remote password when prompted) ---"
-$pubkey = (Get-Content "$key.pub").Trim()
-ssh -p $port "${ruser}@${rhost}" "mkdir -p ~/.ssh && echo `"$pubkey`" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"
+scp -P $port "$key.pub" "${ruser}@${rhost}:/tmp/temp_key.pub"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "`nERROR: Could not reach $rhost on port $port. Is SSH running on the remote machine?"
+    Write-Host "Cleaning up..."
+    Remove-Item -Recurse -Force $dir
+    exit 1
+}
+ssh -p $port "${ruser}@${rhost}" "mkdir -p ~/.ssh && cat /tmp/temp_key.pub >> ~/.ssh/authorized_keys && rm /tmp/temp_key.pub && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"
 
 # --- Add SSH config entry ---
 Write-Host "`n--- Adding SSH config entry ---"
